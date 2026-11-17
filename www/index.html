@@ -886,6 +886,10 @@ button, a, .weapon-slot, .mon-card{ touch-action:manipulation; }              /*
 .fx-ultra #boss svg, .fx-ultra .slash-line, .fx-ultra .grind-line,
 .fx-ultra .axe-chop-fx::before, .fx-ultra .axe-chop-fx::after, .fx-ultra .slice-word::after,
 .fx-ultra .kiss-gift-icon, .fx-ultra .ad-pr, .fx-ultra .emoji-hero{ filter:none !important; }
+/* (d18 시안) 폰이 느려져 절약 모드(fx-lite 이상)가 켜지면 블록을 각각 독립된 층(레이어)으로 분리한다.
+   (2026-11 갤럭시 S10 앱 측정: 블록이 top/left로 내려올 때마다 블록과 꽃 모자를 매 프레임 다시 그리던 것이 느려짐의 큰 원인.
+   층을 분리하면 평균 프레임 시간 약 29ms → 약 17ms, 초당 약 35 → 약 57프레임.) 블록은 이미 z-index가 있어 쌓임 순서는 바뀌지 않는다. */
+.fx-lite .block{ will-change:transform; }
 .particle.bone{
   width:5px; height:14px; background:linear-gradient(#fffef6,#f0e6cc); border-radius:2px;
   box-shadow:0 0 4px rgba(0,0,0,.45);
@@ -8334,64 +8338,14 @@ const ART = (function(){
 })();
 </script>
 <script>
-/* diag-5: 속도 확인용 표시 + 보스/콤보 원인 찾기용 시험 스위치 D·H·I·J (시험 앱 전용. 게임 코드는 건드리지 않는다) */
+/* diag-6: 속도 확인용 숫자판만 표시 (시험 앱 전용. 게임 코드는 건드리지 않는다) */
 (function(){
   var box = document.createElement('div');
   box.style.cssText = 'position:fixed;left:2px;bottom:2px;z-index:2147483647;pointer-events:none;max-width:98vw';
-  var btnRow = document.createElement('div');
-  btnRow.style.cssText = 'display:flex;gap:3px;margin-bottom:3px;pointer-events:auto;flex-wrap:wrap';
   var txt = document.createElement('div');
   txt.style.cssText = 'background:rgba(0,0,0,.72);color:#7CFC7C;font:10px/1.3 monospace;padding:3px 5px;white-space:pre;border-radius:4px;pointer-events:none';
-  box.appendChild(btnRow); box.appendChild(txt); document.body.appendChild(box);
-  function mkSwitch(label, offText, onText, css){
-    var on = false, b = document.createElement('button'), st = document.createElement('style');
-    st.textContent = css;
-    b.style.cssText = 'font:bold 10px/1 sans-serif;padding:6px 6px;border-radius:6px;border:1px solid #888;background:#222;color:#fff;opacity:.92';
-    function paint(){ b.textContent = label + ' ' + (on ? onText : offText); b.style.background = on ? '#b3261e' : '#222'; }
-    b.addEventListener('click', function(e){ e.stopPropagation(); on = !on; paint(); if(on) document.head.appendChild(st); else if(st.parentNode) st.parentNode.removeChild(st); });
-    paint(); btnRow.appendChild(b);
-  }
-  // D: (기준 비교용) 꽃 모자를 숨긴다 — 지난 시험에서 가장 효과가 컸던 설정
-  mkSwitch('D 꽃모자', '보임', '숨김', '.hat{display:none!important}');
-  // H: 꽃 모자를 블록과 따로 떨어진 층(레이어)으로 분리해서, 블록이 움직여도 모자 그림을 다시 그리지 않게 한다
-  mkSwitch('H 모자층', '기본', '분리', '.hat{will-change:transform}');
-  // I: 블록 전체를 한 장의 층으로 분리한다 (블록이 위아래로 내려올 때 그림을 다시 그리지 않게 한다)
-  mkSwitch('I 블록층', '기본', '분리', '.block{will-change:transform}');
-  // J: 꽃 모자의 벡터 그림(SVG)을 한 번만 사진(비트맵)으로 바꿔 둔다 (모양은 그대로, 매번 벡터를 그리는 일을 없앤다)
-  var jOrig = [], jOn = false;
-  function eachHatRule(fn){
-    var st = document.getElementById('world-style'); if(!st || !st.sheet) return;
-    Array.prototype.forEach.call(st.sheet.cssRules, function(r){
-      if(r.style && r.selectorText && r.selectorText.indexOf('.hat') >= 0 && /data:image\/svg/.test(r.style.backgroundImage || '')) fn(r);
-    });
-  }
-  function jApply(){
-    jOrig = [];
-    eachHatRule(function(r){
-      var src = r.style.backgroundImage, m = /url\(["']?(.*?)["']?\)\s*$/.exec(src);
-      if(!m) return;
-      jOrig.push([r, src]);
-      var img = new Image();
-      img.onload = function(){
-        try{
-          var c = document.createElement('canvas'); c.width = 320; c.height = 192;
-          c.getContext('2d').drawImage(img, 0, 0, 320, 192);
-          c.toBlob(function(bl){ if(bl && jOn) r.style.backgroundImage = 'url("' + URL.createObjectURL(bl) + '")'; });
-        }catch(e){}
-      };
-      img.src = m[1];
-    });
-  }
-  function jRevert(){ jOrig.forEach(function(p){ p[0].style.backgroundImage = p[1]; }); }
-  (function(){
-    var b = document.createElement('button');
-    b.style.cssText = 'font:bold 10px/1 sans-serif;padding:6px 6px;border-radius:6px;border:1px solid #888;background:#222;color:#fff;opacity:.92';
-    function paint(){ b.textContent = 'J 모자그림 ' + (jOn ? '사진화' : '기본'); b.style.background = jOn ? '#b3261e' : '#222'; }
-    b.addEventListener('click', function(e){ e.stopPropagation(); jOn = !jOn; paint(); if(jOn) jApply(); else jRevert(); });
-    paint(); btnRow.appendChild(b);
-  })();
-  var ua = navigator.userAgent || '';
-  var wv = /; wv\)/.test(ua);
+  box.appendChild(txt); document.body.appendChild(box);
+  var wv = /; wv\)/.test(navigator.userAgent || '');
   var cap = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   var T = [], last = 0;
   function loop(t){ if(last){ T.push([t, t - last]); } last = t; var cut = t - 5000; while(T.length && T[0][0] < cut) T.shift(); requestAnimationFrame(loop); }
@@ -8404,7 +8358,7 @@ const ART = (function(){
     var mode = app ? (app.classList.contains('fx-ultra') ? 2 : (app.classList.contains('fx-lite') ? 1 : 0)) : '?';
     var na = 0; try{ na = document.getAnimations().filter(function(a){ return a.playState === 'running'; }).length; }catch(e){}
     txt.textContent =
-      'diag-5 d15 ' + (cap ? 'APP' : 'WEB') + (wv ? ' wv' : '') + ' dpr ' + window.devicePixelRatio + '\n' +
+      'diag-6 d18 ' + (cap ? 'APP' : 'WEB') + (wv ? ' wv' : '') + ' dpr ' + window.devicePixelRatio + '\n' +
       'avg ' + avg.toFixed(1) + 'ms  fps(5s) ' + (n ? (n / 5).toFixed(0) : 0) + '\n' +
       'worst ' + worst.toFixed(0) + 'ms  slow ' + slow + '/' + n + '\n' +
       'perf mode ' + mode + '  anim ' + na;
