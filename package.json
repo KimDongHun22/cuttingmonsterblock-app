@@ -1,0 +1,11 @@
+{
+  "name": "sagsag-monster-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "사각사각 몬스터 앱 (Capacitor)",
+  "dependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/cli": "^8.6.2",
+    "@capacitor/core": "^8.6.2"
+  }
+}

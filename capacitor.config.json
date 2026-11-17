@@ -1,0 +1,11 @@
+{
+  "appId": "com.cuttingmonsterblock.game",
+  "appName": "사각사각 몬스터",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}
