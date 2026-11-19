@@ -11,7 +11,7 @@
 /* (앱) Capacitor 앱 안에서 열렸는지 가장 먼저 표시 → 시작 화면(스플래시)이 첫 화면부터 보이도록 */
 (function(){ try{ var c=window.Capacitor; var app=!!(c && ((typeof c.isNativePlatform==='function' && c.isNativePlatform()) || (typeof c.getPlatform==='function' && c.getPlatform()!=='web'))) || !!window.androidBridge; if(app) document.documentElement.classList.add('is-app'); }catch(e){} })();
 </script>
-<link rel="manifest" href="manifest.json">
+<!-- (앱) 앱 안에는 manifest.json 이 없고 필요하지도 않아서 연결을 뺐다 (홈 화면 추가용 설정이라 웹 전용) -->
 <meta name="theme-color" content="#120821">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -98,6 +98,8 @@ html.is-app #splash{ display:flex; }
 #splash .game-title{ font-size:clamp(40px,12.5vw,58px); position:static; top:auto; white-space:nowrap; }
 /* "몬" 글자 위 눈 상자: 게임 첫 화면 제목과 같은 정사각형 비율(글자 크기 기준 em)로 위로 솟게 하고,
    상자의 아랫변은 실제 ㅁ의 아랫변 위치에 정확히 맞춘다. */
+/* (앱) 앱 공유창에서 카드·글 보내기와 저장이 모두 되므로 '글 복사 / 이미지 복사 / 이미지 저장' 버튼은 숨긴다 */
+html.native-share .share-tools{ display:none; }
 #splash .mon-eye-box{ left:.0765em; top:-.18em; bottom:auto; width:.625em; transform:none; }
 .sp-sub{ margin:0; font-family:'Jua',sans-serif; font-size:clamp(12px,3.6vw,15px); color:var(--text-dim); text-align:center; letter-spacing:.2px; word-break:keep-all; text-wrap:balance; max-width:100%; }
 .sp-row{ display:flex; justify-content:center; gap:clamp(6px,2vw,12px); width:100%; margin-top:clamp(10px,3vh,28px); }
@@ -2596,7 +2598,8 @@ html.is-app #splash{ display:flex; }
   const GAME_URL = 'https://kimdonghun22.github.io/Monster-Cutting_game/';
   const IS_KAKAO = /KAKAOTALK/i.test(navigator.userAgent || '');   // (v36) 카카오톡 인앱 브라우저: 느리고 글자가 작게 보이고 공유창이 안 열려서 따로 안내한다
   // (v36) 카톡 인앱 브라우저 → 외부 브라우저 선택 화면. 웹 프로토타입 임시용이라 앱(APK) 버전에서는 false 로 끄면 된다.
-  const KAKAO_GATE_ENABLED = true;
+  const IS_APP = document.documentElement.classList.contains('is-app');   // (앱) Capacitor 앱 안에서 실행 중인지
+  const KAKAO_GATE_ENABLED = !IS_APP;   // 웹에서는 켜고, 앱(APK)에서는 끈다
   const IS_ANDROID = /Android/i.test(navigator.userAgent || '');
   const IS_MOBILE_UA = IS_ANDROID || /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
   let lastChallengePayload = '';   // 방금 받은 도전장 링크의 d= 값 (외부 브라우저로 옮겨 열 때 그대로 이어주기 위해 보관)
@@ -4261,8 +4264,11 @@ html.is-app #splash{ display:flex; }
     const m = Math.max(isPracticeMode ? perfPracticeSavedMode : perfSavedMode, floor);
     perfMode = m;
     const app = $('#app');
-    app.classList.toggle('fx-lite', m >= 1);
-    app.classList.toggle('fx-ultra', m >= 2);
+    // (d16) 가벼운 모드는 '게임 플레이 화면'에서만 적용한다. 메인·랭킹 화면은 가만히 있는 화면이라 켤 필요가 없고,
+    // 켜 두면 버튼 입체감(그림자 띠)·제목 빛·몬스터 표정 애니메이션만 사라졌다.
+    const inGame = !!gameScreen && gameScreen.classList.contains('active');
+    app.classList.toggle('fx-lite', inGame && m >= 1);
+    app.classList.toggle('fx-ultra', inGame && m >= 2);
   }
   function raisePerfMode(){
     if(isPracticeMode){
@@ -7273,6 +7279,7 @@ const ART = (function(){
     startScreen.classList.toggle('active', name==='start');
     gameScreen.classList.toggle('active', name==='playing');
     rankingScreen.classList.toggle('active', name==='ranking');
+    applyPerfMode();   // (d16) 화면이 바뀔 때마다 가벼운 모드를 게임 화면에서만 켜고 나머지에서는 끈다
     renderBoostUI();
     fitActiveScreen();
   }
@@ -7829,7 +7836,7 @@ const ART = (function(){
       img.src = url;
       shareCanvas = cv; shareBlob = null;
       img.classList.remove('loading');
-      if($('#share-hint').textContent.indexOf('카드를 만드는 중') === 0) setShareHint(shareCopyMode ? '이 화면에서는 공유창이 열리지 않아요. 위 버튼을 누르면 '+(lastDuelCtx() ? '도전 결과' : '도전장')+' 글이 복사되니, 카톡 대화창에 붙여넣어 보내 주세요. (카드는 길게 눌러 저장해서 함께 보내도 돼요)' : '카드를 길게 누르면 사진첩에 저장할 수 있어요.', false);
+      if($('#share-hint').textContent.indexOf('카드를 만드는 중') === 0) setShareHint(NATIVE_SHARE ? '위 버튼을 누르면 공유창이 열려요. 카드와 글을 보낼 앱을 골라 주세요.' : shareCopyMode ? '이 화면에서는 공유창이 열리지 않아요. 위 버튼을 누르면 '+(lastDuelCtx() ? '도전 결과' : '도전장')+' 글이 복사되니, 카톡 대화창에 붙여넣어 보내 주세요. (카드는 길게 눌러 저장해서 함께 보내도 돼요)' : '카드를 길게 누르면 사진첩에 저장할 수 있어요.', false);
       cv.toBlob(b=>{ if(my === shareRenderSeq) shareBlob = b; }, 'image/png');
     }catch(err){
       img.classList.remove('loading');
@@ -7848,6 +7855,28 @@ const ART = (function(){
     }
   }
   window.addEventListener('resize', ()=> requestAnimationFrame(fitShareBox));
+  /* ---------------- (앱) 안드로이드 앱 전용 공유 ----------------
+     앱(웹뷰) 안에서는 브라우저의 공유 기능으로 이미지 파일을 보내는 게 불안정해서, Capacitor 공유·파일 플러그인으로 대신한다.
+     카드 PNG를 앱 임시 폴더에 저장한 뒤 그 파일을 안드로이드 공유창에 실어 보낸다. 플러그인이 없으면(웹) 기존 방식 그대로. */
+  const CAP_PLUGINS = (window.Capacitor && window.Capacitor.Plugins) || {};
+  const NATIVE_SHARE = (IS_APP && CAP_PLUGINS.Share && CAP_PLUGINS.Filesystem) ? { Share:CAP_PLUGINS.Share, FS:CAP_PLUGINS.Filesystem } : null;
+  if(NATIVE_SHARE) document.documentElement.classList.add('native-share');
+  const isShareCancel = e => /cancel|abort|dismiss/i.test(String((e && (e.message || e.name)) || ''));
+  function blobToBase64(blob){
+    return new Promise((res, rej)=>{
+      const r = new FileReader();
+      r.onload = ()=> res(String(r.result).split(',')[1] || '');
+      r.onerror = ()=> rej(r.error || new Error('read'));
+      r.readAsDataURL(blob);
+    });
+  }
+  async function nativeShareImage(blob, text, dialogTitle){
+    const data = await blobToBase64(blob);
+    const f = await NATIVE_SHARE.FS.writeFile({ path:'sagsag_challenge.png', data, directory:'CACHE' });
+    const opts = { title:'사각사각 몬스터', dialogTitle: dialogTitle || '공유하기', files:[ f.uri ] };
+    if(text) opts.text = text;
+    await NATIVE_SHARE.Share.share(opts);
+  }
   let shareCopyMode = false;
   function setShareHint(msg, warn){
     const h = $('#share-hint'); h.textContent = msg; h.classList.toggle('warn', !!warn);
@@ -7860,7 +7889,7 @@ const ART = (function(){
     $('#share-card-img').removeAttribute('src');
     setShareHint('카드를 만드는 중이에요…', false);
     // (v36) 공유창을 열 수 없는 화면(카카오톡 인앱 등)에서는 '복사해서 붙여넣기'로 바로 안내한다
-    shareCopyMode = (typeof navigator.share !== 'function');
+    shareCopyMode = !NATIVE_SHARE && (typeof navigator.share !== 'function');
     $('.share-title').textContent = sendLabel();
     $('#share-go').textContent = shareCopyMode ? (lastDuelCtx() ? '📋 도전 결과 글 복사하기' : '📋 도전장 글 복사하기') : sendLabel();
     $('#share-overlay').hidden = false;
@@ -7891,6 +7920,15 @@ const ART = (function(){
   async function saveShareImage(){
     const blob = await ensureShareBlob();
     if(!blob){ setShareHint('카드를 아직 만드는 중이에요. 잠시 뒤 다시 눌러 주세요.', true); return; }
+    if(NATIVE_SHARE){
+      try{
+        await nativeShareImage(blob, '', '카드 이미지 저장·보내기');
+        setShareHint('공유창에서 갤러리·사진 앱 등을 골라 저장할 수 있어요.', false);
+      }catch(e){
+        if(!isShareCancel(e)) setShareHint('저장하지 못했어요. 카드를 길게 눌러 저장해 주세요.', true);
+      }
+      return;
+    }
     try{
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -7924,6 +7962,16 @@ const ART = (function(){
       const copied = await copyP;
       setShareHint((msg + (copied ? ' 글(게임 주소 포함)은 복사돼 있어요.' : '')).trim(), warn);
     };
+    if(blob && NATIVE_SHARE){
+      try{
+        await nativeShareImage(blob, text, lastDuelCtx() ? '도전 결과 보내기' : '도전장 보내기');
+        await done('공유했어요! 받는 앱에서 글이 빠졌다면 붙여넣기 해 주세요.', false);
+        return;
+      }catch(e){
+        if(isShareCancel(e)){ await done('', false); return; }
+        diag.push('앱 공유 실패 '+errName(e));   // 실패하면 아래 기존 방식(브라우저 공유 → 글 복사)으로 이어서 시도한다
+      }
+    }
     if(!blob) diag.push('이미지 없음');
     else if(typeof navigator.share !== 'function') diag.push('이 브라우저는 공유창 없음');
     else if(typeof navigator.canShare !== 'function') diag.push('canShare 없음');
