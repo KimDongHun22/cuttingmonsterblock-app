@@ -7,6 +7,10 @@
 
 <!-- 홈 화면에 추가(PWA)하면 주소창 없이 앱처럼 실행되도록 하는 설정.
      그냥 브라우저 탭으로 열었을 때는 적용되지 않고, 사용자가 "홈 화면에 추가"를 해야 효과가 있다. -->
+<script>
+/* (앱) Capacitor 앱 안에서 열렸는지 가장 먼저 표시 → 시작 화면(스플래시)이 첫 화면부터 보이도록 */
+(function(){ try{ var c=window.Capacitor; var app=!!(c && ((typeof c.isNativePlatform==='function' && c.isNativePlatform()) || (typeof c.getPlatform==='function' && c.getPlatform()!=='web'))) || !!window.androidBridge; if(app) document.documentElement.classList.add('is-app'); }catch(e){} })();
+</script>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#120821">
 <meta name="mobile-web-app-capable" content="yes">
@@ -64,7 +68,10 @@ html,body{
 input, textarea{ -webkit-user-select:text; user-select:text; }
 button, a, .weapon-slot, .mon-card{ touch-action:manipulation; }              /* (v35) 버튼 연타가 더블탭 확대로 번지지 않도록 */
 
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Baloo+2:wght@500;600;700;800&family=Jua&display=swap');
+/* [앱용] 폰트를 앱 안에 포함 (인터넷 없이도 같은 글꼴 표시) — 모두 OFL 라이선스 */
+@font-face{ font-family:'Jua'; font-style:normal; font-weight:400; font-display:swap; src:url('fonts/jua-subset.woff2') format('woff2'); }
+@font-face{ font-family:'Cinzel'; font-style:normal; font-weight:400 900; font-display:swap; src:url('fonts/cinzel-latin.woff2') format('woff2'); }
+@font-face{ font-family:'Baloo 2'; font-style:normal; font-weight:400 800; font-display:swap; src:url('fonts/baloo2-latin.woff2') format('woff2'); }
 
 #app{
   position:relative; width:100%; height:100%;
@@ -73,6 +80,44 @@ button, a, .weapon-slot, .mon-card{ touch-action:manipulation; }              /*
   overflow:hidden;
   padding-top:var(--sat); padding-bottom:var(--sab);
 }
+
+/* ---------------- (앱) 시작 화면(스플래시) ---------------- */
+#splash{
+  display:none; position:absolute; inset:0; z-index:99999;
+  flex-direction:column; align-items:center; justify-content:space-between;
+  padding:calc(var(--sat) + 8vh) 22px calc(var(--sab) + 7vh);
+  background:
+    radial-gradient(ellipse at 50% 18%, rgba(140,80,220,.28), transparent 62%),
+    radial-gradient(ellipse at 50% 100%, rgba(60,30,100,.55), transparent 60%),
+    var(--bg-deep);
+  transition:opacity .45s ease;
+}
+html.is-app #splash{ display:flex; }
+#splash.out{ opacity:0; pointer-events:none; }
+#splash .sp-center{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:clamp(14px,3vh,26px); width:100%; }
+#splash .game-title{ font-size:clamp(40px,12.5vw,58px); position:static; top:auto; white-space:nowrap; }
+/* "몬" 글자 위 눈 상자: 게임 첫 화면 제목과 같은 정사각형 비율(글자 크기 기준 em)로 위로 솟게 하고,
+   상자의 아랫변은 실제 ㅁ의 아랫변 위치에 정확히 맞춘다. */
+#splash .mon-eye-box{ left:.0765em; top:-.18em; bottom:auto; width:.625em; transform:none; }
+.sp-sub{ margin:0; font-family:'Jua',sans-serif; font-size:clamp(12px,3.6vw,15px); color:var(--text-dim); text-align:center; letter-spacing:.2px; word-break:keep-all; text-wrap:balance; max-width:100%; }
+.sp-row{ display:flex; justify-content:center; gap:clamp(6px,2vw,12px); width:100%; margin-top:clamp(10px,3vh,28px); }
+.sp-mon{ position:relative; width:clamp(48px,15.5vw,72px); aspect-ratio:1/1; transform-origin:50% 100%; animation:sp-hop 1.15s ease-in-out infinite; --r:-5deg; }
+.sp-m1, .sp-m3{ --r:5deg; }
+.sp-mon .block{ position:absolute; inset:0; cursor:default; }
+.sp-m1{ animation-delay:.12s; } .sp-m2{ animation-delay:.24s; } .sp-m3{ animation-delay:.36s; } .sp-m4{ animation-delay:.48s; }
+/* 통통: 웅크렸다가(납작) → 쭉 뛰어오르고(길쭉, 살짝 기울임) → 내려앉으며 찌그러졌다 돌아온다. 옆 친구와 0.12초씩 시차를 둬서 물결처럼 튄다. */
+@keyframes sp-hop{
+  0%   { transform:translateY(0) scale(1.07,.9); }
+  14%  { transform:translateY(0) scale(.94,1.08); }
+  45%  { transform:translateY(-16px) scale(.96,1.06) rotate(var(--r)); }
+  72%  { transform:translateY(0) scale(1.08,.88); }
+  86%  { transform:translateY(0) scale(.98,1.03); }
+  100% { transform:translateY(0) scale(1.07,.9); }
+}
+#splash .sp-bottom{ width:min(70%,280px); display:flex; flex-direction:column; align-items:center; gap:10px; }
+.sp-bar{ width:100%; height:7px; border-radius:99px; background:rgba(255,255,255,.12); overflow:hidden; }
+.sp-bar i{ display:block; height:100%; width:0%; border-radius:99px; background:linear-gradient(90deg,var(--accent-glow),var(--accent-glow-2)); transition:width .25s ease-out; }
+.sp-load{ margin:0; font-family:'Jua',sans-serif; font-size:13px; color:var(--text-dim); }
 
 #app::before{
   content:''; position:absolute; inset:0; pointer-events:none; z-index:0;
@@ -2018,6 +2063,33 @@ button, a, .weapon-slot, .mon-card{ touch-action:manipulation; }              /*
   </div>
 
 
+
+  <!-- (앱) 시작 화면(스플래시): 앱이 켜진 직후 1~2초 보여주고 사라진다. 웹 브라우저에서는 표시되지 않는다. -->
+  <div id="splash" aria-hidden="true">
+    <div class="sp-center">
+      <div class="sp-title"><h1 class="game-title"><span class="slice-word"><span class="slice-half slice-top">사각사각</span><span class="slice-half slice-bottom">사각사각</span></span> <span class="title-suffix"><span class="mon-char">몬<span class="mon-eye-box"><span class="mon-eye"></span></span></span>스터</span></h1></div>
+      <p class="sp-sub">몬스터들을 사각사각 베어내고 공주를 구출하라!</p>
+      <div class="sp-row"><div class="sp-mon sp-m0"><div class="block zombie">
+            <svg class="scar" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M 90 47 Q 82 68 68 87" /></svg>
+            <div class="face"><span class="brow b1"></span><span class="brow b2"></span><div class="eyes"><span class="eye"></span><span class="eye"></span></div><div class="mouth"></div></div>
+          </div></div><div class="sp-mon sp-m1"><div class="block dracula">
+            <svg class="hair" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M0,14 C0,5 5,0 14,0 L86,0 C95,0 100,5 100,14 C100,22 82,30 70,42 C61,52 55,66 50,82 C45,66 39,52 30,42 C18,30 0,22 0,14 Z" /></svg>
+            <div class="face"><span class="brow b1"></span><span class="brow b2"></span><div class="eyes"><span class="eye"></span><span class="eye"></span></div><div class="mouth"></div><span class="fang left"></span><span class="fang right"></span></div>
+          </div></div><div class="sp-mon sp-m2"><div class="block mummy">
+            <span class="knot"></span>
+            <div class="face"><span class="brow b1"></span><span class="brow b2"></span><div class="eyes"><span class="eye"></span><span class="eye"></span></div><div class="mouth"></div></div>
+          </div></div><div class="sp-mon sp-m3"><div class="block frank">
+            <span class="bolt-shaft left"></span><span class="bolt-shaft right"></span><span class="bolt-head left"></span><span class="bolt-head right"></span>
+            <div class="face"><span class="brow b1"></span><span class="brow b2"></span><div class="eyes"><span class="eye"></span><span class="eye"></span></div><div class="mouth"></div></div>
+          </div></div><div class="sp-mon sp-m4"><div class="block cyclops">
+            <div class="face"><span class="brow b1"></span><span class="brow b2"></span><div class="eyes"><span class="eye"></span><span class="eye"></span></div><div class="mouth"></div><span class="tusk left"></span><span class="tusk right"></span></div>
+          </div></div></div>
+    </div>
+    <div class="sp-bottom">
+      <div class="sp-bar"><i id="sp-fill"></i></div>
+      <p class="sp-load">불러오는 중…</p>
+    </div>
+  </div>
   <div id="start-screen" class="screen active">
   <div class="screen-fit"><div class="screen-fit-in">
     <div class="home-sec home-sec-title">
@@ -8323,6 +8395,75 @@ const ART = (function(){
   window.addEventListener('focus', restoreAfterReturn);
   // 아이폰은 복귀 직후 사용자의 첫 터치가 있어야 소리가 다시 켜지는 경우가 있어, 터치마다 가볍게 확인한다
   ['pointerdown','touchend','click'].forEach(t=> document.addEventListener(t, ()=>{ try{ if(actx && actx.state !== 'running') actx.resume(); }catch(e){} }, {passive:true, capture:true}));
+
+  /* ---------------- (앱) 시작 화면(스플래시) 닫기 ----------------
+     글꼴·이미지가 준비되고 최소 1.8초가 지나면 부드럽게 사라진다. (준비가 오래 걸려도 6초 뒤에는 무조건 닫는다) */
+  (function(){
+    const sp = document.getElementById('splash');
+    if(!sp) return;
+    if(!document.documentElement.classList.contains('is-app')){ sp.remove(); return; }
+    const fill = document.getElementById('sp-fill');
+    const t0 = performance.now(), MIN = 1800;
+    let closed = false, ready = false;
+    function tick(){
+      if(closed) return;
+      const p = Math.min(ready ? 100 : 90, (performance.now()-t0)/MIN*100);   // 시간에 맞춰 차오르고, 준비가 끝나야 100%
+      if(fill) fill.style.width = p + '%';
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+    function close(){
+      if(closed) return; closed = true;
+      if(fill) fill.style.width = '100%';
+      sp.classList.add('out');
+      setTimeout(()=>{ sp.remove(); }, 500);
+    }
+    const loaded = document.readyState === 'complete' ? Promise.resolve() : new Promise(r=> window.addEventListener('load', r, {once:true}));
+    const fonts = (document.fonts && document.fonts.ready) ? document.fonts.ready.catch(()=>{}) : Promise.resolve();
+    Promise.all([loaded, fonts]).then(()=>{
+      ready = true;
+      const wait = Math.max(300, MIN - (performance.now()-t0));
+      setTimeout(close, wait);
+    });
+    setTimeout(close, 6000);
+  })();
+
+  /* ---------------- (앱) 안드로이드 뒤로가기 버튼 ----------------
+     앱(Capacitor)에서만 동작한다. 웹 브라우저에서는 이 블록이 아무 일도 하지 않는다.
+     화면 상태에 따라: 열린 창 닫기 → 게임 중이면 일시정지 → 랭킹이면 처음 화면 → 처음 화면에서는 "한 번 더 누르면 종료".
+     광고가 나오는 중, 게임오버·공주 구출 연출 중에는 뒤로가기를 무시한다. */
+  (function(){
+    const cap = window.Capacitor;
+    const AppPlugin = cap && cap.Plugins && cap.Plugins.App;
+    const isApp = !!(cap && ((typeof cap.isNativePlatform === 'function' && cap.isNativePlatform()) || (typeof cap.getPlatform === 'function' && cap.getPlatform() !== 'web')));
+    if(!(isApp && AppPlugin && AppPlugin.addListener)) return;
+    let lastExitTry = 0;
+    const open = (el)=> !!el && !el.hidden;
+    const click = (sel)=>{ const b = document.querySelector(sel); if(b) b.click(); };
+    function onBack(){
+      if(document.getElementById('splash')) return;                               // 시작 화면(스플래시) 중: 무시
+      if(adRunning) return;                                                        // 광고 중: 무시
+      if(open($('#kakao-gate'))) return;
+      if(open($('#duel-result'))){ click('#dr-ok'); return; }                      // 도전 결과 팝업 닫기
+      if(open($('#share-overlay'))){ click('#share-close'); return; }              // 도전장 보내기 창 닫기
+      if(open($('#duel-overlay'))){ click('#duel-later'); return; }                // 도전 수락 창: 나중에 할게요
+      if(tutorialActive){ click('.tut-skip'); return; }                            // 게임방법 안내: 건너뛰기
+      if(rankingResetOverlay.classList.contains('show')){ click('#ranking-reset-cancel'); return; }
+      if(trainingSummaryOverlay.classList.contains('show')){ click('#training-summary-close'); return; }
+      if(giveupOverlay.classList.contains('show')){ click('#giveup-cancel'); return; }
+      if(pauseOverlayEl.classList.contains('show')){ click('#pause-resume'); return; }
+      if(state === 'playing'){ pauseGame(); return; }                              // 게임 중: 일시정지
+      if(gameoverOverlay.classList.contains('show')) return;                       // 게임오버 연출 중: 무시
+      if(rankingScreen.classList.contains('active')){ click('#btn-ranking-back'); return; }
+      if(startScreen.classList.contains('active')){                                // 처음 화면: 두 번 눌러야 종료
+        const now = Date.now();
+        if(now - lastExitTry < 2000){ try{ AppPlugin.exitApp(); }catch(e){} return; }
+        lastExitTry = now;
+        showToast('한 번 더 누르면 앱이 종료돼요');
+      }
+    }
+    AppPlugin.addListener('backButton', onBack);
+  })();
 
   /* ---------------- (v35) 스와이프로 뒤로가기/창 전환 방지 ----------------
      아이폰 사파리·카카오톡 등은 화면 가장자리를 밀면 '뒤로가기'가 되어 게임 페이지를 떠나버리고,
