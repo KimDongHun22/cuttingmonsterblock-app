@@ -3405,11 +3405,11 @@ html.native-share .share-tools{ display:none; }
     return randomZombieType();
   }
   let toastTimer = null;
-  function showToast(msg){
+  function showToast(msg, ms){
     toastEl.textContent = msg;
     toastEl.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(()=>toastEl.classList.remove('show'), 1500);
+    toastTimer = setTimeout(()=>toastEl.classList.remove('show'), ms || 1500);
   }
   const bannerEl = $('#event-banner');
   function showBanner(title, sub, color, ms){
@@ -7697,9 +7697,11 @@ const ART = (function(){
   const ADMOB_REWARDED_ID = 'ca-app-pub-3940256099942544/5224354917';   // 구글 연습용 보상형 광고 ID
   const ADMOB_TESTING = true;
   let admobInitP = null, nativeAd = null;   // nativeAd = { kind, earned, done } (광고 한 번의 진행 상태)
-  // ★ 연습 단계 점검용: 광고가 어디까지 진행됐는지 화면 위쪽에 작게 보여준다. (확인이 끝나면 지운다)
+  // 점검용: 광고가 어디까지 진행됐는지 화면 위쪽에 작게 보여준다. (평소엔 꺼 둠)
+  const AD_DEBUG = false;   // 점검 칸 보기: true 로 바꾸면 화면 위에 광고 진행 기록이 나온다 (평소엔 꺼 둠)
   const adLogs = []; let adDbgEl = null;
   function adLog(msg){
+    if(!AD_DEBUG) return;
     try{
       const d = new Date(); const t = String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');
       adLogs.push(t+' '+msg); if(adLogs.length > 9) adLogs.shift();
@@ -7738,7 +7740,20 @@ const ART = (function(){
     showToast(kind === 'unlock' ? '보상 적용! 이번 판에 새 무기 공주 수가 절반이에요' : '보상 적용! 다음 판 특수 무기 대기시간 30% 단축');
   }
   // 광고 한 번이 끝났을 때(닫힘·실패·복귀) 한 번만 정리한다: 음악 되살리고, 보상 못 받았으면 안내.
+  // 광고 안내 문구: 글자(토스트)와 함께 두 광고 버튼의 설명 줄도 4초 동안 바꿔서 놓치지 않게 한다.
+  let adNoteTimer = null;
+  function adNotify(msg){
+    showToast(msg, 3500);
+    ['#btn-ad-unlock','#btn-ad-cool'].forEach(sel=>{
+      const b = $(sel); const sub = b && b.querySelector('.ad-sub'); if(!sub) return;
+      if(sub.dataset.orig == null) sub.dataset.orig = sub.textContent;
+      sub.textContent = '⚠️ ' + msg;
+    });
+    clearTimeout(adNoteTimer);
+    adNoteTimer = setTimeout(()=>{ if(!nativeAd) setAdLoading(false); }, 4000);
+  }
   function setAdLoading(on){
+    clearTimeout(adNoteTimer);
     ['#btn-ad-unlock','#btn-ad-cool'].forEach(sel=>{
       const b = $(sel); if(!b) return;
       b.classList.toggle('loading', !!on);
@@ -7752,7 +7767,7 @@ const ART = (function(){
     adLog('광고 정리'+(a.earned?'(보상받음)':'(보상없음)'));
     a.done = true; nativeAd = null;
     setAdLoading(false);
-    if(!a.earned) showToast(msg || '광고를 끝까지 봐야 보상을 받을 수 있어요');
+    if(!a.earned) adNotify(msg || '광고를 끝까지 봐야 보상을 받을 수 있어요');
     if(state === 'start') playMusic(TITLE_TRACK, true);
     admobPreloadSoon(1500);
   }
@@ -7794,7 +7809,7 @@ const ART = (function(){
       if(nativeAd === me){ nativeAd = null; me.done = true; }
       adPre = null;
       setAdLoading(false);
-      showToast('광고를 불러오지 못했어요. 인터넷을 확인하고 잠시 뒤 다시 눌러 주세요');
+      adNotify('광고를 불러오지 못했어요. 인터넷을 확인하고 잠시 뒤 다시 눌러 주세요');
       admobPreloadSoon(5000);
       return;
     }
