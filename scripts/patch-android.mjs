@@ -3,7 +3,12 @@
 //   1) 화면을 세로로 고정 (게임이 세로 화면용이라서)
 //   2) 앱 아이콘 + 시작 화면(스플래시) 그림을 우리 게임 것으로 교체 (resources/android-res 폴더의 내용을 그대로 덮어써요)
 //   3) 안드로이드 12 이상 시작 화면의 배경색·아이콘 지정
+//   4) AdMob 광고용 '앱 ID'를 앱 설정(AndroidManifest)에 넣기
 import { readFileSync, writeFileSync, cpSync, existsSync } from 'node:fs';
+
+// ★ AdMob 앱 ID. 지금은 구글이 개발자에게 공개한 '연습용 앱 ID'예요 (진짜 광고·수익 없음).
+//   출시 전에 AdMob 사이트에서 받은 진짜 앱 ID(ca-app-pub-숫자~숫자)로 바꿔야 해요.
+const ADMOB_APP_ID = 'ca-app-pub-3940256099942544~3347511713';
 
 // 1) 세로 고정
 const manifestFile = 'android/app/src/main/AndroidManifest.xml';
@@ -40,4 +45,22 @@ if (!styles.includes('windowSplashScreenBackground')) {
   }
 } else {
   console.log('이미 시작 화면 설정이 있어요');
+}
+
+// 4) AdMob 앱 ID
+{
+  const mf = 'android/app/src/main/AndroidManifest.xml';
+  let m = readFileSync(mf, 'utf8');
+  if (!m.includes('com.google.android.gms.ads.APPLICATION_ID')) {
+    if (m.includes('</application>')) {
+      m = m.replace('</application>',
+        `    <meta-data\n            android:name="com.google.android.gms.ads.APPLICATION_ID"\n            android:value="${ADMOB_APP_ID}" />\n    </application>`);
+      writeFileSync(mf, m);
+      console.log('AdMob 앱 ID를 설정에 넣었어요');
+    } else {
+      console.log('주의: </application> 을 찾지 못해서 AdMob 앱 ID를 넣지 못했어요');
+    }
+  } else {
+    console.log('이미 AdMob 앱 ID가 있어요');
+  }
 }

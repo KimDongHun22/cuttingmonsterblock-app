@@ -7687,8 +7687,82 @@ const ART = (function(){
   });
   $('#ad-continue').addEventListener('click', ()=>{ sfxClick(); $('#ad-confirm').hidden = true; });
   $('#ad-quit').addEventListener('click', ()=>{ sfxClick(); closeAd(); });
-  $('#btn-ad-unlock').addEventListener('click', ()=>{ sfxClick(); startFakeAd('unlock'); });
-  $('#btn-ad-cool').addEventListener('click',   ()=>{ sfxClick(); startFakeAd('cool'); });
+  /* ---------- (앱) 진짜 보상형 광고 (AdMob) ----------
+     앱(안드로이드)에서는 위의 가짜 광고 대신 AdMob 보상형 광고를 보여준다. 웹에서는 예전 가짜 광고 그대로.
+     · 광고를 끝까지 봐서 '보상 완료' 신호가 올 때만 보상을 준다. 중간에 닫으면 보상 없음.
+     · ★ 지금은 구글이 공개한 '연습용 광고 ID'만 쓴다(진짜 광고·수익 없음). 출시 전에 진짜 광고 단위 ID로 바꾸고 ADMOB_TESTING 을 false 로 바꾼다.
+     · 광고가 안 뜨면(인터넷 없음 등) 안내만 하고 보상은 주지 않는다. */
+  const ADMOB_PLUGIN = (IS_APP && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.AdMob) || null;
+  const ADMOB_REWARDED_ID = 'ca-app-pub-3940256099942544/5224354917';   // 구글 연습용 보상형 광고 ID
+  const ADMOB_TESTING = true;
+  let admobInitP = null, nativeAd = null;   // nativeAd = { kind, earned, done } (광고 한 번의 진행 상태)
+  function admobEnsureInit(){
+    if(!admobInitP){
+      admobInitP = ADMOB_PLUGIN.initialize({ initializeForTesting: ADMOB_TESTING }).catch(e=>{ admobInitP = null; throw e; });
+    }
+    return admobInitP;
+  }
+  // 보상 완료·닫힘·실패 신호 받기 (한 번만 등록). 신호가 하나라도 빠져도 아래 '앱으로 돌아옴' 감시가 정리해 준다.
+  let admobListening = false;
+  function admobListen(){
+    if(admobListening) return; admobListening = true;
+    try{
+      ADMOB_PLUGIN.addListener('onRewardedVideoAdReward',      ()=>{ earnNativeAd(); }).catch(()=>{});
+      ADMOB_PLUGIN.addListener('onRewardedVideoAdDismissed',   ()=>{ const a = nativeAd; setTimeout(()=>{ if(nativeAd && nativeAd === a) finishNativeAd(); }, 400); }).catch(()=>{});
+      ADMOB_PLUGIN.addListener('onRewardedVideoAdFailedToShow',()=>{ finishNativeAd('광고를 보여주지 못했어요. 잠시 뒤 다시 눌러 주세요'); }).catch(()=>{});
+    }catch(e){}
+  }
+  function grantBoostReward(kind){
+    if(kind === 'unlock') pendingBoost.unlock = true;
+    if(kind === 'cool')   pendingBoost.cool = true;
+    saveBoost();
+    renderBoostUI();
+    showToast(kind === 'unlock' ? '보상 적용! 이번 판에 새 무기 공주 수가 절반이에요' : '보상 적용! 다음 판 특수 무기 대기시간 30% 단축');
+  }
+  // 광고 한 번이 끝났을 때(닫힘·실패·복귀) 한 번만 정리한다: 음악 되살리고, 보상 못 받았으면 안내.
+  function finishNativeAd(msg){
+    const a = nativeAd; if(!a || a.done) return;
+    a.done = true; nativeAd = null;
+    if(!a.earned) showToast(msg || '광고를 끝까지 봐야 보상을 받을 수 있어요');
+    if(state === 'start') playMusic(TITLE_TRACK, true);
+  }
+  function earnNativeAd(){
+    const a = nativeAd; if(!a || a.earned || a.done) return;
+    a.earned = true;
+    grantBoostReward(a.kind);
+  }
+  async function startNativeAd(kind){
+    if(nativeAd) return;                       // 이미 광고 진행 중이면 무시
+    nativeAd = { kind, earned:false, done:false };
+    const me = nativeAd;
+    showToast('광고를 불러오는 중이에요…');
+    try{
+      await admobEnsureInit();
+      const timeout = new Promise((_, rej)=> setTimeout(()=> rej(new Error('timeout')), 20000));   // 광고 준비가 20초 넘게 걸리면 포기
+      await Promise.race([ ADMOB_PLUGIN.prepareRewardVideoAd({ adId: ADMOB_REWARDED_ID, isTesting: ADMOB_TESTING }), timeout ]);
+    }catch(e){
+      if(nativeAd === me){ nativeAd = null; me.done = true; }
+      showToast('광고를 불러오지 못했어요. 인터넷을 확인하고 잠시 뒤 다시 눌러 주세요');
+      return;
+    }
+    if(nativeAd !== me) return;
+    stopMusic();
+    admobListen();
+    me.shownAt = Date.now();
+    ADMOB_PLUGIN.showRewardVideoAd().then(()=>{ if(nativeAd === me) earnNativeAd(); }).catch(()=>{
+      if(nativeAd === me) finishNativeAd('광고를 보여주지 못했어요. 잠시 뒤 다시 눌러 주세요');
+    });
+  }
+  // 광고 화면에서 게임 화면으로 돌아오면(신호가 안 와도) 광고가 끝난 것으로 정리한다.
+  document.addEventListener('visibilitychange', ()=>{
+    const a = nativeAd;
+    if(a && !document.hidden && a.shownAt && Date.now() - a.shownAt > 1500){
+      setTimeout(()=>{ if(nativeAd === a) finishNativeAd(); }, 1200);
+    }
+  });
+  const startRewardedAd = (kind)=>{ if(ADMOB_PLUGIN) startNativeAd(kind); else startFakeAd(kind); };
+  $('#btn-ad-unlock').addEventListener('click', ()=>{ sfxClick(); startRewardedAd('unlock'); });
+  $('#btn-ad-cool').addEventListener('click',   ()=>{ sfxClick(); startRewardedAd('cool'); });
 
   /* ---------- 점수 공유 (카드 이미지 + 글) ---------- */
   // 카드용 공주 이미지(355×560). 파일 경로로 불러오면 index.html을 파일로 열었을 때 캔버스가 막혀 저장이 안 되므로 코드 안에 넣어 둔다.
