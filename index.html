@@ -7697,9 +7697,24 @@ const ART = (function(){
   const ADMOB_REWARDED_ID = 'ca-app-pub-3940256099942544/5224354917';   // 구글 연습용 보상형 광고 ID
   const ADMOB_TESTING = true;
   let admobInitP = null, nativeAd = null;   // nativeAd = { kind, earned, done } (광고 한 번의 진행 상태)
+  // ★ 연습 단계 점검용: 광고가 어디까지 진행됐는지 화면 위쪽에 작게 보여준다. (확인이 끝나면 지운다)
+  const adLogs = []; let adDbgEl = null;
+  function adLog(msg){
+    try{
+      const d = new Date(); const t = String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');
+      adLogs.push(t+' '+msg); if(adLogs.length > 9) adLogs.shift();
+      if(!adDbgEl){
+        adDbgEl = document.createElement('div');
+        adDbgEl.style.cssText = 'position:fixed;left:4px;right:4px;top:calc(env(safe-area-inset-top,0px) + 4px);z-index:2147483647;pointer-events:none;background:rgba(0,0,0,.72);color:#9f9;font:11px/1.35 monospace;padding:4px 6px;border-radius:6px;white-space:pre-wrap;word-break:break-all';
+        document.body.appendChild(adDbgEl);
+      }
+      adDbgEl.textContent = 'AD점검 v'+'3\n'+adLogs.join('\n');
+    }catch(e){}
+  }
   function admobEnsureInit(){
     if(!admobInitP){
-      admobInitP = ADMOB_PLUGIN.initialize({ initializeForTesting: ADMOB_TESTING }).catch(e=>{ admobInitP = null; throw e; });
+      adLog('초기화 시작');
+      admobInitP = ADMOB_PLUGIN.initialize({ initializeForTesting: ADMOB_TESTING }).then(r=>{ adLog('초기화 완료'); return r; }).catch(e=>{ adLog('초기화 실패 '+((e&&e.message)||e)); admobInitP = null; throw e; });
     }
     return admobInitP;
   }
@@ -7708,9 +7723,11 @@ const ART = (function(){
   function admobListen(){
     if(admobListening) return; admobListening = true;
     try{
-      ADMOB_PLUGIN.addListener('onRewardedVideoAdReward',      ()=>{ earnNativeAd(); }).catch(()=>{});
-      ADMOB_PLUGIN.addListener('onRewardedVideoAdDismissed',   ()=>{ const a = nativeAd; setTimeout(()=>{ if(nativeAd && nativeAd === a) finishNativeAd(); }, 400); }).catch(()=>{});
-      ADMOB_PLUGIN.addListener('onRewardedVideoAdFailedToShow',()=>{ finishNativeAd('광고를 보여주지 못했어요. 잠시 뒤 다시 눌러 주세요'); }).catch(()=>{});
+      ADMOB_PLUGIN.addListener('onRewardedVideoAdReward',      ()=>{ adLog('신호: 보상'); earnNativeAd(); }).catch(()=>{});
+      ADMOB_PLUGIN.addListener('onRewardedVideoAdDismissed',   ()=>{ adLog('신호: 닫힘'); const a = nativeAd; setTimeout(()=>{ if(nativeAd && nativeAd === a) finishNativeAd(); }, 400); }).catch(()=>{});
+      ADMOB_PLUGIN.addListener('onRewardedVideoAdFailedToShow',(e)=>{ adLog('신호: 보여주기 실패 '+JSON.stringify(e||{})); finishNativeAd('광고를 보여주지 못했어요. 잠시 뒤 다시 눌러 주세요'); }).catch(()=>{});
+      ['onRewardedVideoAdLoaded','onRewardedVideoAdShowed','onRewardedVideoAdImpression'].forEach(n=> ADMOB_PLUGIN.addListener(n, ()=>adLog('신호: '+n.replace('onRewardedVideoAd',''))).catch(()=>{}));
+      ADMOB_PLUGIN.addListener('onRewardedVideoAdFailedToLoad',(e)=>adLog('신호: 불러오기 실패 '+JSON.stringify(e||{}))).catch(()=>{});
     }catch(e){}
   }
   function grantBoostReward(kind){
@@ -7732,6 +7749,7 @@ const ART = (function(){
   }
   function finishNativeAd(msg){
     const a = nativeAd; if(!a || a.done) return;
+    adLog('광고 정리'+(a.earned?'(보상받음)':'(보상없음)'));
     a.done = true; nativeAd = null;
     setAdLoading(false);
     if(!a.earned) showToast(msg || '광고를 끝까지 봐야 보상을 받을 수 있어요');
@@ -7749,16 +7767,18 @@ const ART = (function(){
   let adPre = null;          // 미리 불러오는 중이거나 불러온 광고(Promise)
   function admobPreload(){
     if(!ADMOB_PLUGIN || adPre) return adPre;
+    adLog('광고 미리 불러오기');
     const p = admobEnsureInit().then(()=> Promise.race([
       ADMOB_PLUGIN.prepareRewardVideoAd({ adId: ADMOB_REWARDED_ID, isTesting: ADMOB_TESTING }),
       new Promise((_, rej)=> setTimeout(()=> rej(new Error('timeout')), 25000))
     ]));
     adPre = p;
-    p.catch(()=>{ if(adPre === p) adPre = null; });
+    p.then(()=>adLog('광고 준비됨'), e=>{ adLog('광고 준비 실패 '+((e&&e.message)||e)); if(adPre === p) adPre = null; });
     return p;
   }
   function admobPreloadSoon(ms){ if(ADMOB_PLUGIN) setTimeout(()=>{ try{ admobPreload(); }catch(e){} }, ms); }
   async function startNativeAd(kind){
+    adLog('버튼 눌림 '+kind+(nativeAd ? ' (진행중 상태:'+(nativeAd.earned?'보상받음':'대기')+')' : ''));
     if(nativeAd){
       // 지난 광고 정리가 안 된 채 멈춰 있으면(보상 받음/90초 이상 지남) 정리하고 새로 시작, 아니면 안내만 한다.
       if(nativeAd.earned || Date.now() - nativeAd.t0 > 90000) finishNativeAd();
@@ -7780,16 +7800,18 @@ const ART = (function(){
     }
     if(nativeAd !== me) return;
     setAdLoading(false);
+    adLog('광고 보여주기 호출');
     adPre = null;                              // 이 광고는 지금 쓴다 (다 쓰면 다음 광고를 다시 미리 불러옴)
     stopMusic();
     admobListen();
     me.shownAt = Date.now();
-    ADMOB_PLUGIN.showRewardVideoAd().then(()=>{ if(nativeAd === me) earnNativeAd(); }).catch(()=>{
+    ADMOB_PLUGIN.showRewardVideoAd().then(()=>{ adLog('보여주기 결과: 보상'); if(nativeAd === me) earnNativeAd(); }).catch((e)=>{ adLog('보여주기 오류 '+((e&&e.message)||e));
       if(nativeAd === me) finishNativeAd('광고를 보여주지 못했어요. 잠시 뒤 다시 눌러 주세요');
     });
   }
   // 광고 화면에서 게임 화면으로 돌아오면(신호가 안 와도) 광고가 끝난 것으로 정리한다.
   document.addEventListener('visibilitychange', ()=>{
+    if(ADMOB_PLUGIN) adLog('화면 '+(document.hidden?'가려짐':'돌아옴'));
     const a = nativeAd;
     if(a && !document.hidden && a.shownAt && Date.now() - a.shownAt > 1500){
       setTimeout(()=>{ if(nativeAd === a) finishNativeAd(); }, 1200);
@@ -7797,6 +7819,7 @@ const ART = (function(){
   });
   const startRewardedAd = (kind)=>{ if(ADMOB_PLUGIN) startNativeAd(kind); else startFakeAd(kind); };
   admobPreloadSoon(3500);   // 앱을 켜고 잠시 뒤 광고를 미리 불러 둔다
+  if(ADMOB_PLUGIN){ ['#btn-ad-unlock','#btn-ad-cool'].forEach(sel=> $(sel).addEventListener('pointerdown', ()=>adLog('터치 '+sel.slice(8)), true)); admobPreloadSoon(0); }
   $('#btn-ad-unlock').addEventListener('click', ()=>{ sfxClick(); startRewardedAd('unlock'); });
   $('#btn-ad-cool').addEventListener('click',   ()=>{ sfxClick(); startRewardedAd('cool'); });
 
